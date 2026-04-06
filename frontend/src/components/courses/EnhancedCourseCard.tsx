@@ -13,20 +13,26 @@ interface Course {
   rating?: number;
   numRatings?: number;
   courseHours?: number;
+  referralDiscount?: number;
+  commissionPercent?: number;
 }
 
 interface EnhancedCourseCardProps {
   course: Course;
   isPurchased?: boolean;
   index?: number;
+  showDiscount?: boolean;
 }
 
 export default function EnhancedCourseCard({ 
   course, 
   isPurchased = false,
-  index = 0 
+  index = 0,
+  showDiscount = false
 }: EnhancedCourseCardProps) {
   const router = useRouter();
+  const discountPercent = course.referralDiscount || 10;
+  const discountedPrice = showDiscount ? Math.round(course.price * (1 - discountPercent / 100)) : course.price;
 
   const handleClick = () => {
     router.push(`/courses/${course._id}`);
@@ -78,6 +84,15 @@ export default function EnhancedCourseCard({
         
         {/* Badge Overlay */}
         <div className="absolute top-3 left-3 flex gap-2">
+          {showDiscount && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="px-3 py-1 bg-green-500 text-white text-xs font-semibold rounded-full shadow-lg"
+            >
+              🎁 {discountPercent}% OFF
+            </motion.span>
+          )}
           {isPurchased && (
             <motion.span
               initial={{ scale: 0 }}
@@ -93,6 +108,15 @@ export default function EnhancedCourseCard({
             </span>
           )}
         </div>
+
+        {/* Commission badge */}
+        {course.commissionPercent && course.commissionPercent > 0 && (
+          <div className="absolute top-3 right-3">
+            <span className="px-2 py-1 bg-yellow-500 text-white text-xs font-semibold rounded-full shadow-lg">
+              💰 Earn {course.commissionPercent}%
+            </span>
+          </div>
+        )}
 
         {/* Hover Overlay */}
         <motion.div
@@ -153,9 +177,18 @@ export default function EnhancedCourseCard({
         {/* Price & Action */}
         <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
           <div>
-            <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              ₹{course.price}
-            </span>
+            {showDiscount ? (
+              <div className="flex flex-col">
+                <span className="text-sm text-gray-400 line-through">₹{course.price}</span>
+                <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  ₹{discountedPrice}
+                </span>
+              </div>
+            ) : (
+              <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                ₹{course.price}
+              </span>
+            )}
           </div>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -167,10 +200,12 @@ export default function EnhancedCourseCard({
             className={`px-5 py-2 rounded-lg font-medium transition-colors text-sm ${
               isPurchased
                 ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                : showDiscount
+                ? 'bg-green-600 hover:bg-green-700 text-white'
                 : 'bg-blue-600 hover:bg-blue-700 text-white'
             }`}
           >
-            {isPurchased ? 'View Course' : 'Enroll Now'}
+            {isPurchased ? 'View Course' : showDiscount ? 'Claim Discount' : 'Enroll Now'}
           </motion.button>
         </div>
       </div>

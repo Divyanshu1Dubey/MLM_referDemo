@@ -1,0 +1,14 @@
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775407624587 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775407645588 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775407747656 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775407786073 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775407876271 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775407955678 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775407956091 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775407980582 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775408343713 => [200] OK
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775408390715 => [404] Not Found
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775408390715 => [404] Not Found
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775408686933 => [404] Not Found
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775408686933 => [404] Not Found
+[GET] http://localhost:3000/_next/static/css/app/layout.css?v=1775408686933 => [404] Not Found

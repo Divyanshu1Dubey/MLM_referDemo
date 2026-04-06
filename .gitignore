@@ -8,7 +8,11 @@ coverage/
 
 # Next.js
 frontend/.next/
+frontend/.next-dev/
 frontend/out/
+
+# Local tooling artifacts
+.playwright-mcp/
 
 # Production
 build/

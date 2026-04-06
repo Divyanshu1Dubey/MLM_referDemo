@@ -4,11 +4,16 @@ export interface IUser extends Document {
   username: string;
   email: string;
   password: string;
+  phone?: string;
   referralCode: string;
   referredBy?: mongoose.Types.ObjectId;
   credits: number;
+  walletBalance: number;
+  totalEarnings: number;
+  pendingEarnings: number;
   hasConverted: boolean;
-  creditedReferrals: mongoose.Types.ObjectId[]; // Track which referrals have been credited
+  creditedReferrals: mongoose.Types.ObjectId[];
+  role: 'user' | 'admin';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +39,10 @@ const UserSchema = new Schema<IUser>(
         'Please provide a valid email address',
       ],
     },
+    phone: {
+      type: String,
+      trim: true,
+    },
     password: {
       type: String,
       required: [true, 'Password is required'],
@@ -54,6 +63,21 @@ const UserSchema = new Schema<IUser>(
       default: 0,
       min: [0, 'Credits cannot be negative'],
     },
+    walletBalance: {
+      type: Number,
+      default: 0,
+      min: [0, 'Wallet balance cannot be negative'],
+    },
+    totalEarnings: {
+      type: Number,
+      default: 0,
+      min: [0, 'Total earnings cannot be negative'],
+    },
+    pendingEarnings: {
+      type: Number,
+      default: 0,
+      min: [0, 'Pending earnings cannot be negative'],
+    },
     hasConverted: {
       type: Boolean,
       default: false,
@@ -63,6 +87,11 @@ const UserSchema = new Schema<IUser>(
       ref: 'User',
       default: [],
       index: true,
+    },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
     },
   },
   {

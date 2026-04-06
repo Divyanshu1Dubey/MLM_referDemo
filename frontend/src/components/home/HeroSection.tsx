@@ -3,7 +3,11 @@
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
-export default function HeroSection() {
+interface HeroSectionProps {
+  referralCode?: string | null;
+}
+
+export default function HeroSection({ referralCode }: HeroSectionProps) {
   const router = useRouter();
 
   return (
@@ -37,55 +41,106 @@ export default function HeroSection() {
             transition={{ duration: 0.8 }}
             className="text-white"
           >
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full mb-6"
-            >
-              <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              <span className="text-sm font-medium">🎉 Now offering 100+ courses</span>
-            </motion.div>
+            {/* Referral Badge */}
+            {referralCode ? (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/30 backdrop-blur-sm rounded-full mb-6 border border-green-400/50"
+              >
+                <span className="text-2xl">🎁</span>
+                <span className="text-sm font-bold text-green-200">You've been invited! Get 10% OFF</span>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full mb-6"
+              >
+                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <span className="text-sm font-medium">🎉 Join 10,000+ students learning today</span>
+              </motion.div>
+            )}
 
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 leading-tight">
-              Learn Without
-              <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-300">
-                Limits
-              </span>
+              {referralCode ? (
+                <>
+                  Your Friend
+                  <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-emerald-300">
+                    Invited You!
+                  </span>
+                </>
+              ) : (
+                <>
+                  Learn Without
+                  <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-300">
+                    Limits
+                  </span>
+                </>
+              )}
             </h1>
 
             <p className="text-xl md:text-2xl text-blue-100 mb-8 leading-relaxed">
-              Master new skills with world-class courses. Earn credits by referring friends and unlock courses for free!
+              {referralCode 
+                ? "Claim your exclusive 10% discount on your first course. Plus, start earning by referring others!"
+                : "Master new skills with world-class courses. Earn money by referring friends and unlock unlimited earning potential!"}
             </p>
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => router.push('/#courses')}
-                className="px-8 py-4 bg-white text-blue-600 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
-              >
-                Explore Courses
-              </motion.button>
-              
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => router.push('/register')}
-                className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-xl font-bold text-lg hover:bg-white/10 transition-all"
-              >
-                Get Started Free
-              </motion.button>
+              {referralCode ? (
+                <>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => router.push(`/register?r=${referralCode}`)}
+                    className="px-8 py-4 bg-green-500 text-white rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl hover:bg-green-600 transition-all"
+                  >
+                    🎁 Claim 10% Discount
+                  </motion.button>
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => router.push('/#courses')}
+                    className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-xl font-bold text-lg hover:bg-white/10 transition-all"
+                  >
+                    Browse Courses
+                  </motion.button>
+                </>
+              ) : (
+                <>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => router.push('/#courses')}
+                    className="px-8 py-4 bg-white text-blue-600 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all"
+                  >
+                    Explore Courses
+                  </motion.button>
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => router.push('/register')}
+                    className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-xl font-bold text-lg hover:bg-white/10 transition-all"
+                  >
+                    Start Earning Today
+                  </motion.button>
+                </>
+              )}
             </div>
 
             {/* Features List */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
-                { icon: '📚', text: '100+ Courses' },
-                { icon: '🎓', text: 'Expert Instructors' },
-                { icon: '💰', text: 'Earn Credits' },
+                { icon: '📚', text: '20+ Premium Courses' },
+                { icon: '💰', text: '10% Commission' },
+                { icon: '🎁', text: '10% Referral Discount' },
               ].map((feature, index) => (
                 <motion.div
                   key={feature.text}
@@ -115,17 +170,16 @@ export default function HeroSection() {
                 transition={{ duration: 4, repeat: Infinity }}
                 className="absolute top-0 right-0 w-64 bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
               >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg" />
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg flex items-center justify-center">
+                    <span className="text-white text-lg">💰</span>
+                  </div>
                   <div>
-                    <div className="h-3 w-24 bg-white/60 rounded mb-2" />
-                    <div className="h-2 w-16 bg-white/40 rounded" />
+                    <div className="text-white font-bold">+₹499</div>
+                    <div className="text-xs text-blue-200">Commission earned</div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="h-2 bg-white/40 rounded" />
-                  <div className="h-2 bg-white/40 rounded w-3/4" />
-                </div>
+                <div className="text-xs text-blue-200">From referral: Rahul M.</div>
               </motion.div>
 
               <motion.div
@@ -133,17 +187,19 @@ export default function HeroSection() {
                 transition={{ duration: 5, repeat: Infinity }}
                 className="absolute bottom-0 left-0 w-64 bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
               >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-blue-500 rounded-lg" />
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg flex items-center justify-center">
+                    <span className="text-white text-lg">👥</span>
+                  </div>
                   <div>
-                    <div className="h-3 w-24 bg-white/60 rounded mb-2" />
-                    <div className="h-2 w-16 bg-white/40 rounded" />
+                    <div className="text-white font-bold">12 Referrals</div>
+                    <div className="text-xs text-blue-200">This month</div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="h-2 bg-white/40 rounded" />
-                  <div className="h-2 bg-white/40 rounded w-3/4" />
+                <div className="w-full bg-white/20 rounded-full h-2">
+                  <div className="bg-green-400 h-2 rounded-full" style={{ width: '75%' }} />
                 </div>
+                <div className="text-xs text-blue-200 mt-1">75% to Gold tier!</div>
               </motion.div>
 
               {/* Center Achievement Badge */}
@@ -152,7 +208,10 @@ export default function HeroSection() {
                 transition={{ duration: 3, repeat: Infinity }}
                 className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-2xl"
               >
-                <span className="text-6xl">🏆</span>
+                <div className="text-center">
+                  <span className="text-4xl">🏆</span>
+                  <div className="text-xs font-bold text-white mt-1">Top Earner</div>
+                </div>
               </motion.div>
             </div>
           </motion.div>

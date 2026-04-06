@@ -11,6 +11,9 @@ export interface ICourse extends Document {
   creditsRequired: number;
   instructor: string;
   level: string;
+  commissionPercent: number;
+  referralDiscount: number;
+  thumbnail?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +71,22 @@ const CourseSchema = new Schema<ICourse>(
       type: String,
       enum: ['Beginner', 'Intermediate', 'Advanced'],
       default: 'Beginner',
+    },
+    commissionPercent: {
+      type: Number,
+      default: 10,
+      min: [0, 'Commission cannot be negative'],
+      max: [100, 'Commission cannot exceed 100%'],
+    },
+    referralDiscount: {
+      type: Number,
+      default: 20,
+      min: [0, 'Discount cannot be negative'],
+      max: [100, 'Discount cannot exceed 100%'],
+    },
+    thumbnail: {
+      type: String,
+      default: '',
     },
   },
   {

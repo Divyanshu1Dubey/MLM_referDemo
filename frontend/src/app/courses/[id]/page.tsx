@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useSession } from 'next-auth/react';
 import { coursesAPI, setAuthToken, userAPI, apiClient } from '@/lib/api';
@@ -20,11 +20,14 @@ interface Course {
   creditsRequired: number;
   instructor: string;
   level: string;
+  referralDiscount?: number;
+  commissionPercent?: number;
 }
 
 export default function CourseDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,7 +35,43 @@ export default function CourseDetailsPage() {
   const [purchasingWithCredits, setPurchasingWithCredits] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
   const [userCredits, setUserCredits] = useState(0);
+  const [userReferralCode, setUserReferralCode] = useState('');
+  const [hasValidReferral, setHasValidReferral] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [referralCodeInput, setReferralCodeInput] = useState('');
+  const [appliedReferralCode, setAppliedReferralCode] = useState('');
   const { showNotification } = useNotificationStore();
+
+  const normalizeReferralCode = (code: string | null) => (code || '').trim().toUpperCase();
+
+  // Check for course-specific referral (discount only applies to THIS course)
+  useEffect(() => {
+    const referralCodeFromQuery = normalizeReferralCode(searchParams.get('ref'));
+    const referralCodeFromStorage = normalizeReferralCode(localStorage.getItem('referralCode'));
+    const referralCode = referralCodeFromQuery || referralCodeFromStorage;
+    const referredCourseId = searchParams.get('course') || localStorage.getItem('referredCourseId');
+    
+    // Store in localStorage if coming from URL
+    if (referralCodeFromQuery) {
+      localStorage.setItem('referralCode', referralCodeFromQuery);
+    }
+    if (searchParams.get('course')) {
+      localStorage.setItem('referredCourseId', searchParams.get('course')!);
+    }
+    
+    // Discount is valid ONLY if:
+    // 1. There's a referral code AND
+    // 2. Either: no specific course was set (generic referral) OR the course matches this page
+    if (referralCode && (!referredCourseId || referredCourseId === params.id)) {
+      setHasValidReferral(true);
+      setAppliedReferralCode(referralCode);
+      setReferralCodeInput(referralCode);
+      return;
+    }
+
+    setHasValidReferral(false);
+    setAppliedReferralCode('');
+  }, [searchParams, params.id]);
 
   useEffect(() => {
     if (params.id) {
@@ -44,6 +83,7 @@ export default function CourseDetailsPage() {
     if (status === 'authenticated' && course) {
       checkPurchaseStatus();
       fetchUserCredits();
+      fetchUserReferralCode();
     }
   }, [status, course]);
 
@@ -51,7 +91,7 @@ export default function CourseDetailsPage() {
     try {
       setLoading(true);
       const response = await coursesAPI.getById(params.id as string);
-      setCourse(response.data);
+      setCourse(response.data || null);
     } catch (error: any) {
       showNotification(
         error.response?.data?.error || 'Failed to load course details',
@@ -93,6 +133,54 @@ export default function CourseDetailsPage() {
     }
   };
 
+  const fetchUserReferralCode = async () => {
+    try {
+      const token = (session as any)?.accessToken;
+      if (!token) return;
+
+      setAuthToken(token);
+      const response = await userAPI.getProfile();
+      setUserReferralCode(response.user?.referralCode || '');
+    } catch (error) {
+      console.error('Failed to fetch referral code:', error);
+    }
+  };
+
+  const clearAppliedReferral = () => {
+    localStorage.removeItem('referralCode');
+    localStorage.removeItem('referredCourseId');
+    setHasValidReferral(false);
+    setAppliedReferralCode('');
+    setReferralCodeInput('');
+  };
+
+  const handleApplyReferralCode = () => {
+    const normalizedCode = normalizeReferralCode(referralCodeInput);
+
+    if (!normalizedCode) {
+      showNotification('Please enter a referral code', 'error');
+      return;
+    }
+
+    if (userReferralCode && normalizedCode === normalizeReferralCode(userReferralCode)) {
+      showNotification('You cannot use your own referral code', 'error');
+      return;
+    }
+
+    setReferralCodeInput(normalizedCode);
+    setAppliedReferralCode(normalizedCode);
+    setHasValidReferral(true);
+    localStorage.setItem('referralCode', normalizedCode);
+    if (course?._id) {
+      localStorage.setItem('referredCourseId', course._id);
+    }
+
+    showNotification(
+      `Referral code ${normalizedCode} applied. Discount will be verified at purchase.`,
+      'success'
+    );
+  };
+
   const handlePurchaseWithMoney = async () => {
     if (!session) {
       showNotification('Please login to purchase courses', 'error');
@@ -105,7 +193,10 @@ export default function CourseDetailsPage() {
       const token = (session as any).accessToken;
       setAuthToken(token);
 
-      const response = await coursesAPI.purchase(course!._id);
+      const response = await coursesAPI.purchase(course!._id, {
+        applyReferralDiscount: hasValidReferral,
+        referralCode: hasValidReferral ? appliedReferralCode : undefined,
+      });
 
       showNotification(
         response.creditsEarned > 0
@@ -114,11 +205,27 @@ export default function CourseDetailsPage() {
         'success'
       );
 
+      // Clear the referral data after purchase
+      clearAppliedReferral();
+
       setIsPurchased(true);
       fetchUserCredits();
     } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to purchase course';
+
+      if (
+        [
+          'Invalid referral code',
+          'You cannot use your own referral code',
+          'A different referral has already been applied',
+          'Referral code can only be applied before your first purchase',
+        ].includes(errorMessage)
+      ) {
+        clearAppliedReferral();
+      }
+
       showNotification(
-        error.response?.data?.error || 'Failed to purchase course',
+        errorMessage,
         'error'
       );
     } finally {
@@ -155,6 +262,26 @@ export default function CourseDetailsPage() {
     } finally {
       setPurchasingWithCredits(false);
     }
+  };
+
+  // Generate course-specific referral link
+  const getCourseReferralLink = () => {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}/?ref=${userReferralCode}&course=${course?._id}`;
+  };
+
+  const copyReferralLink = () => {
+    const link = getCourseReferralLink();
+    navigator.clipboard.writeText(link);
+    setLinkCopied(true);
+    showNotification('Referral link copied!', 'success');
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const shareOnWhatsApp = () => {
+    const link = getCourseReferralLink();
+    const text = `🎓 Check out this amazing course: "${course?.title}"!\n\n🎁 Use my referral link to get ${course?.referralDiscount || 20}% OFF!\n\n${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const renderStars = (rating: number) => {
@@ -203,7 +330,25 @@ export default function CourseDetailsPage() {
   }
 
   if (!course) {
-    return null;
+    return (
+      <>
+        <Notification />
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 py-10 px-4 transition-colors">
+          <div className="max-w-xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 text-center">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Course not available</h2>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">
+              We could not load this course right now.
+            </p>
+            <button
+              onClick={() => router.push('/')}
+              className="mt-5 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              Back to courses
+            </button>
+          </div>
+        </div>
+      </>
+    );
   }
 
   const creditsNeeded = course.creditsRequired - userCredits;
@@ -284,8 +429,18 @@ export default function CourseDetailsPage() {
 
               <div className="px-6 sm:px-8 py-4 sm:py-6 bg-gray-50 dark:bg-gray-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>{renderStars(course.rating)}</div>
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  ₹{course.price}
+                <div className="text-right">
+                  {hasValidReferral && !isPurchased && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg text-gray-400 line-through">₹{course.price}</span>
+                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">
+                        🎁 {course.referralDiscount || 20}% OFF
+                      </span>
+                    </div>
+                  )}
+                  <div className={`text-2xl sm:text-3xl font-bold ${hasValidReferral && !isPurchased ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
+                    ₹{hasValidReferral && !isPurchased ? Math.round(course.price * (1 - (course.referralDiscount || 20) / 100)) : course.price}
+                  </div>
                 </div>
               </div>
             </div>
@@ -333,6 +488,61 @@ export default function CourseDetailsPage() {
                     ))}
                   </ul>
                 </motion.div>
+
+                {/* Share This Course Section - For logged-in users */}
+                {session && userReferralCode && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-lg p-6 sm:p-8 border-2 border-indigo-200 dark:border-indigo-800"
+                  >
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                      <span className="text-2xl mr-2">💰</span>
+                      Share & Earn {course.commissionPercent || 10}% Commission
+                    </h2>
+                    <p className="text-gray-600 dark:text-gray-300 mb-4">
+                      Share this course with friends and earn <span className="font-bold text-green-600">₹{Math.round(course.price * (course.commissionPercent || 10) / 100)}</span> when they purchase using your link!
+                    </p>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Your referral link for this course:</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={getCourseReferralLink()}
+                          className="flex-1 bg-gray-100 dark:bg-gray-700 rounded px-3 py-2 text-sm font-mono truncate"
+                        />
+                        <button
+                          onClick={copyReferralLink}
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            linkCopied
+                              ? 'bg-green-500 text-white'
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                          }`}
+                        >
+                          {linkCopied ? '✓ Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={shareOnWhatsApp}
+                        className="flex-1 flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-3 rounded-lg font-medium hover:bg-green-600 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                        </svg>
+                        Share on WhatsApp
+                      </button>
+                    </div>
+                    <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                        🎁 Your friends will get <span className="font-bold">{course.referralDiscount || 20}% OFF</span> on this specific course when they use your link!
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               {/* Sidebar - Purchase Options */}
@@ -379,24 +589,97 @@ export default function CourseDetailsPage() {
                     </div>
                   ) : (
                     <div className="space-y-4 sm:space-y-6">
+                      {/* Referral Code Input */}
+                      <div className="border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 bg-indigo-50/40 dark:bg-indigo-900/10">
+                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">
+                          Have a referral code?
+                        </h3>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Enter a code like G14PNLSL to unlock referral discount at enrollment.
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                          <input
+                            type="text"
+                            value={referralCodeInput}
+                            onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                            placeholder="Enter referral code"
+                            className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
+                          />
+                          <button
+                            onClick={handleApplyReferralCode}
+                            disabled={!referralCodeInput.trim()}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              referralCodeInput.trim()
+                                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                            }`}
+                          >
+                            Apply
+                          </button>
+                        </div>
+
+                        {hasValidReferral && appliedReferralCode && (
+                          <div className="mt-3 flex items-center justify-between gap-2 rounded-md bg-green-100 dark:bg-green-900/30 px-3 py-2">
+                            <p className="text-xs sm:text-sm text-green-800 dark:text-green-300">
+                              Applied code: <span className="font-semibold">{appliedReferralCode}</span>
+                            </p>
+                            <button
+                              onClick={clearAppliedReferral}
+                              className="text-xs sm:text-sm text-green-700 dark:text-green-400 hover:underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Referral Discount Banner */}
+                      {hasValidReferral && (
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-2xl">🎁</span>
+                            <span className="font-bold text-green-700 dark:text-green-400">Referral Discount Applied!</span>
+                          </div>
+                          <p className="text-sm text-green-600 dark:text-green-300">
+                            You're getting {course.referralDiscount || 20}% off as a referred user
+                          </p>
+                          {appliedReferralCode && (
+                            <p className="text-xs text-green-700 dark:text-green-400 mt-1">
+                              Referral code: {appliedReferralCode}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
                       {/* Money Purchase Option */}
                       <div className="border-2 border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
                         <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2">
                           Buy with Money
                         </h3>
-                        <p className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400 mb-3 sm:mb-4">
-                          ₹{course.price}
-                        </p>
+                        {hasValidReferral ? (
+                          <div className="mb-3 sm:mb-4">
+                            <span className="text-lg text-gray-400 line-through">₹{course.price}</span>
+                            <p className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400">
+                              ₹{Math.round(course.price * (1 - (course.referralDiscount || 20) / 100))}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400 mb-3 sm:mb-4">
+                            ₹{course.price}
+                          </p>
+                        )}
                         <button
                           onClick={handlePurchaseWithMoney}
                           disabled={purchasing || !session}
                           className={`w-full py-2.5 sm:py-3 rounded-lg font-medium transition-colors text-sm sm:text-base ${
                             purchasing || !session
                               ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                              : hasValidReferral
+                              ? 'bg-green-600 hover:bg-green-700 text-white'
                               : 'bg-blue-600 hover:bg-blue-700 text-white'
                           }`}
                         >
-                          {purchasing ? 'Processing...' : 'Purchase Now'}
+                          {purchasing ? 'Processing...' : hasValidReferral ? '🎁 Purchase with Discount' : 'Purchase Now'}
                         </button>
                         {!session && (
                           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">
@@ -404,6 +687,19 @@ export default function CourseDetailsPage() {
                           </p>
                         )}
                       </div>
+
+                      {/* Commission Info */}
+                      {course.commissionPercent && course.commissionPercent > 0 && (
+                        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xl">💰</span>
+                            <span className="font-bold text-yellow-700 dark:text-yellow-400">Refer & Earn!</span>
+                          </div>
+                          <p className="text-sm text-yellow-600 dark:text-yellow-300">
+                            Earn <span className="font-bold">{course.commissionPercent}% commission</span> (₹{Math.round(course.price * course.commissionPercent / 100)}) when others purchase via your referral
+                          </p>
+                        </div>
+                      )}
 
                       {/* Credits Purchase Option */}
                       <div className="border-2 border-blue-500 dark:border-blue-600 rounded-lg p-4 sm:p-6 bg-blue-50/50 dark:bg-blue-900/10">
