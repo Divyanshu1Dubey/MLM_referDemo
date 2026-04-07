@@ -4,6 +4,7 @@ A full-stack web application featuring a comprehensive referral and credit syste
 
 ## 📋 Table of Contents
 
+
 - [Overview](#overview)
 - [System Architecture](#system-architecture)
 - [Tech Stack](#tech-stack)
