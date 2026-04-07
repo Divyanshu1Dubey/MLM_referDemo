@@ -12,6 +12,7 @@ This file contains example API requests for testing the Course Store backend.
 
 ---
 
+
 ## 1. Health Check
 
 ### GET /health
